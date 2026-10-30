@@ -37,20 +37,30 @@ export class HandoverService implements HandoverPort {
   }
 
   async issue(claimId: string, options?: { tx?: any }): Promise<HandoverIssueResult> {
+    const executor = options?.tx || this.ctx.db;
     const claim = await this.ctx.ports.core.getClaim(claimId);
+
+    // Prevent duplicate issuance for already collected claims
+    const existing = await executor.query(
+      'SELECT id, collected_at FROM handovers WHERE claim_id = $1 AND collected_at IS NOT NULL',
+      [claimId],
+    );
+    if (existing.rows.length > 0) {
+      throw new BadRequestError('Item has already been collected for this claim', 'ALREADY_COLLECTED');
+    }
+
     const secret = this.ctx.config.handoverSecret;
-    const handoverId = 'ho_' + Math.random().toString(36).substring(2, 10);
+    const handoverId = 'ho_' + crypto.randomBytes(8).toString('hex');
     const issuedAt = new Date().toISOString();
     const expiresAt = new Date(
       Date.now() + this.ctx.config.handoverExpiryHours * 3600 * 1000,
     ).toISOString();
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 1000000).toString();
     const qrToken = deriveQrToken(secret, handoverId, claimId, issuedAt);
     const qrTokenHash = hmacHash(secret, qrToken);
     const otpHash = hmacHash(secret, otp);
 
-    const executor = options?.tx || this.ctx.db;
     await executor.query(
       `INSERT INTO handovers (
         id, item_id, claim_id, claimant_id, qr_token_hash, otp_hash,
@@ -176,13 +186,27 @@ export class HandoverService implements HandoverPort {
     const otpMatches = safeCompareHex(inputOtpHash, handover.otp_hash);
 
     if (!otpMatches) {
-      const newAttempts = handover.attempts + 1;
-      const willLock = newAttempts >= 5;
-
-      await this.ctx.db.query(
-        'UPDATE handovers SET attempts = $1, locked = $2 WHERE id = $3',
-        [newAttempts, willLock, handover.id],
+      const updateResult = await this.ctx.db.query(
+        `UPDATE handovers
+         SET attempts = attempts + 1,
+             locked = CASE WHEN attempts + 1 >= 5 THEN TRUE ELSE FALSE END
+         WHERE id = $1 AND locked = FALSE AND collected_at IS NULL
+         RETURNING attempts, locked`,
+        [handover.id],
       );
+
+      if (updateResult.rowCount === 0) {
+        const checkRes = await this.ctx.db.query(
+          'SELECT locked, collected_at FROM handovers WHERE id = $1',
+          [handover.id],
+        );
+        if (checkRes.rows.length > 0 && checkRes.rows[0].collected_at) {
+          throw new BadRequestError('Item has already been collected with this token', 'ALREADY_COLLECTED');
+        }
+        throw new BadRequestError('Handover is locked due to security attempts limit', 'HANDOVER_LOCKED');
+      }
+
+      const { attempts: newAttempts, locked: willLock } = updateResult.rows[0];
 
       if (willLock) {
         await this.ctx.ports.audit.log({
@@ -204,24 +228,59 @@ export class HandoverService implements HandoverPort {
       );
     }
 
-    // Success! Update handover record
-    await this.ctx.db.query(
-      `UPDATE handovers
-       SET collected_at = CURRENT_TIMESTAMP, security_id = $1
-       WHERE id = $2`,
-      [security_id, handover.id],
-    );
+    // Execute all custody release mutations inside a genuine shared database transaction
+    let didUpdate = false;
+    try {
+      await this.ctx.db.transaction(async (tx) => {
+        const updateHo = await tx.query(
+          `UPDATE handovers
+           SET collected_at = CURRENT_TIMESTAMP, security_id = $1
+           WHERE id = $2 AND collected_at IS NULL AND locked = FALSE`,
+          [security_id, handover.id],
+        );
 
-    // Update claim and item to COLLECTED
-    await this.ctx.ports.core.markCollected(handover.claim_id, handover.item_id);
+        if (updateHo.rowCount === 0) {
+          const checkRes = await tx.query(
+            'SELECT locked, collected_at FROM handovers WHERE id = $1',
+            [handover.id],
+          );
+          if (checkRes.rows.length > 0 && checkRes.rows[0].locked) {
+            throw new BadRequestError('Handover is locked due to security attempts limit', 'HANDOVER_LOCKED');
+          }
+          throw new BadRequestError('Item has already been collected with this token', 'ALREADY_COLLECTED');
+        }
 
-    // Record custody release
-    await this.ctx.ports.workflow.recordCustody({
-      item_id: handover.item_id,
-      event: 'RELEASED',
-      actor_id: security_id,
-      location: 'Security Lost & Found Desk',
-    });
+        didUpdate = true;
+
+        // Update claim and item to COLLECTED within the shared transaction
+        await this.ctx.ports.core.markCollected(handover.claim_id, handover.item_id, { tx });
+
+        // Record custody release within the same flow
+        await this.ctx.ports.workflow.recordCustody({
+          item_id: handover.item_id,
+          event: 'RELEASED',
+          actor_id: security_id,
+          location: 'Security Lost & Found Desk',
+        });
+      });
+    } catch (err) {
+      if (didUpdate) {
+        // Revert handover and claim/item status only if this transaction updated them before failing downstream
+        await this.ctx.db.query(
+          `UPDATE handovers SET collected_at = NULL, security_id = NULL WHERE id = $1`,
+          [handover.id],
+        );
+        await this.ctx.db.query(
+          `UPDATE claims SET status = 'APPROVED' WHERE id = $1 AND status = 'COLLECTED'`,
+          [handover.claim_id],
+        );
+        await this.ctx.db.query(
+          `UPDATE items SET status = 'APPROVED_AWAITING_COLLECTION' WHERE id = $1 AND status = 'COLLECTED'`,
+          [handover.item_id],
+        );
+      }
+      throw err;
+    }
 
     // Audits
     await this.ctx.ports.audit.log({

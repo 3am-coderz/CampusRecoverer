@@ -39,7 +39,7 @@ export class CoreServicesStub implements CoreServicesPort {
     this.claims.set(id, claim);
   }
 
-  async markCollected(claim_id: string, item_id: string): Promise<void> {
+  async markCollected(claim_id: string, item_id: string, _options?: { tx?: any }): Promise<void> {
     await this.setClaimStatus(claim_id, 'COLLECTED');
     await this.setItemStatus(item_id, 'COLLECTED');
   }

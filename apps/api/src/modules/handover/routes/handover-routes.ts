@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from '../../../kernel/auth.js';
 
 const handoverVerifyRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 50,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

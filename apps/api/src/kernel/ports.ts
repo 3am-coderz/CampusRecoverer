@@ -131,7 +131,7 @@ export interface CoreServicesPort {
   listClaimsForItem(item_id: string): Promise<any[]>;
   setItemStatus(id: string, status: ItemStatus): Promise<void>;
   setClaimStatus(id: string, status: ClaimStatus): Promise<void>;
-  markCollected(claim_id: string, item_id: string): Promise<void>;
+  markCollected(claim_id: string, item_id: string, options?: { tx?: any }): Promise<void>;
   createNotification(payload: NotificationPayload): Promise<void>;
 }
 

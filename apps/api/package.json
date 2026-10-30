@@ -12,7 +12,8 @@
     "test:core": "vitest run src/modules/core",
     "test:handover": "vitest run src/modules/handover",
     "test:workflow": "vitest run src/modules/workflow",
-    "test:audit": "vitest run src/modules/audit"
+    "test:audit": "vitest run src/modules/audit",
+    "test:admin": "vitest run src/modules/admin"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
