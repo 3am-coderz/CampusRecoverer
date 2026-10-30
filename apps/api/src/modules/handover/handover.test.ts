@@ -63,11 +63,6 @@ describe('Member 2: Handover Module Tests', () => {
       [claimId, itemId, studentId],
     );
 
-    await db.query(
-      `INSERT INTO claim_answers (id, claim_id, question_id, matched, similarity, created_at)
-       VALUES ('ans_ho_test', $1, 'q_test', true, 0.95, CURRENT_TIMESTAMP)`,
-      [claimId],
-    );
   });
 
   afterAll(async () => {

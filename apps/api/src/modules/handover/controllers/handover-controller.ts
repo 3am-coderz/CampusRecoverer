@@ -2,11 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AppContext } from '../../../kernel/app.js';
 import { HandoverService } from '../services/handover-service.js';
-import { BadRequestError, ForbiddenError } from '../../../kernel/errors.js';
+import { BadRequestError, ForbiddenError, UnauthorizedError } from '../../../kernel/errors.js';
 
 const verifySchema = z.object({
-  qr_token: z.string().min(1),
-  otp: z.string().min(4).max(8),
+  qr_token: z.string().trim().min(1),
+  otp: z.string().trim().min(4).max(8),
   id_verified: z.boolean().default(false),
 });
 
@@ -19,7 +19,7 @@ export class HandoverController {
 
   getQr = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!req.user) throw new ForbiddenError('Authentication required');
+      if (!req.user) throw new UnauthorizedError('Authentication required', 'AUTH_REQUIRED');
       const claimId = req.params.claimId;
       const data = await this.service.getQrForClaim(claimId, req.user.id);
       res.status(200).json(data);
@@ -30,7 +30,7 @@ export class HandoverController {
 
   verify = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!req.user) throw new ForbiddenError('Authentication required');
+      if (!req.user) throw new UnauthorizedError('Authentication required', 'AUTH_REQUIRED');
       const parsed = verifySchema.safeParse(req.body);
       if (!parsed.success) {
         throw new BadRequestError(parsed.error.errors[0].message);

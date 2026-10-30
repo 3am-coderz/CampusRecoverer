@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AppContext } from '../../../kernel/app.js';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../../../kernel/errors.js';
+import { BadRequestError, NotFoundError, ForbiddenError, UnauthorizedError } from '../../../kernel/errors.js';
+import { RiskLevel } from '../../../kernel/ports.js';
 import { toPublicItem, toDetailedItem } from '../utils/projections.js';
 
 const createItemSchema = z.object({
@@ -13,6 +14,12 @@ const createItemSchema = z.object({
   found_date: z.string().datetime().or(z.string()),
 });
 
+const verifyItemSchema = z
+  .object({
+    risk_level: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  })
+  .optional();
+
 export class ItemController {
   private ctx: AppContext;
 
@@ -22,7 +29,7 @@ export class ItemController {
 
   create = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!req.user) throw new ForbiddenError('Authentication required');
+      if (!req.user) throw new UnauthorizedError('Authentication required', 'AUTH_REQUIRED');
 
       const parsed = createItemSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -120,14 +127,14 @@ export class ItemController {
     try {
       const itemId = req.params.id;
       const row = await this.ctx.ports.core.getItem(itemId);
-      if (!row) throw new NotFoundError('Item not found');
+      if (!row) throw new NotFoundError('Item not found', 'ITEM_NOT_FOUND');
 
       // Security check: non-staff cannot view PENDING_HANDOVER or WAITING_PERIOD unless they are the finder
       const isStaff = req.user && (req.user.role === 'SECURITY' || req.user.role === 'ADMIN');
       const isFinder = req.user && req.user.id === row.finder_id;
 
       if (!isStaff && !isFinder && (row.status === 'PENDING_HANDOVER' || row.status === 'WAITING_PERIOD')) {
-        throw new NotFoundError('Item not found or not currently available for public viewing');
+        throw new NotFoundError('Item not found or not currently available for public viewing', 'ITEM_NOT_FOUND');
       }
 
       res.status(200).json({ item: toDetailedItem(row, req.user) });
@@ -138,10 +145,45 @@ export class ItemController {
 
   verify = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const itemId = req.params.id;
-      const row = await this.ctx.ports.core.getItem(itemId);
+      // 1. Authenticated user and role verification (defense-in-depth)
+      if (!req.user) {
+        throw new UnauthorizedError('Authentication required', 'AUTH_REQUIRED');
+      }
+      if (req.user.role !== 'SECURITY' && req.user.role !== 'ADMIN') {
+        throw new ForbiddenError('Insufficient permissions for this resource', 'FORBIDDEN_ROLE');
+      }
 
-      // Must have physical receipt from security desk custody
+      const itemId = req.params.id;
+
+      // 2. Validate optional request body schema
+      if (req.body && Object.keys(req.body).length > 0) {
+        const parsed = verifyItemSchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new BadRequestError(parsed.error.errors[0].message);
+        }
+      }
+
+      // 3. Validate item existence first
+      const row = await this.ctx.ports.core.getItem(itemId);
+      if (!row) {
+        throw new NotFoundError(`Item with ID ${itemId} not found`, 'ITEM_NOT_FOUND');
+      }
+
+      // 4. Reject duplicate verification
+      if (row.security_verified) {
+        throw new BadRequestError('Item has already been verified', 'ALREADY_VERIFIED');
+      }
+
+      // 5. Validate current status permits verification (must be PENDING_HANDOVER)
+      if (row.status !== 'PENDING_HANDOVER') {
+        this.ctx.ports.workflow.assertItemTransition(row.status, 'WAITING_PERIOD');
+        throw new BadRequestError(
+          `Cannot verify item with status '${row.status}'. Only items with status 'PENDING_HANDOVER' can be verified.`,
+          'ILLEGAL_ITEM_TRANSITION',
+        );
+      }
+
+      // 6. Must have physical custody receipt logged at security desk
       const hasReceipt = await this.ctx.ports.workflow.hasReceipt(itemId);
       if (!hasReceipt) {
         throw new BadRequestError(
@@ -152,24 +194,78 @@ export class ItemController {
 
       this.ctx.ports.workflow.assertItemTransition(row.status, 'WAITING_PERIOD');
 
-      const classifiedRisk = this.ctx.ports.risk.classify(row.category, row.hidden_attributes);
-      const waitingHours = this.ctx.config.waitingPeriods[classifiedRisk] || 24;
-      const waitingUntil = new Date(Date.now() + waitingHours * 3600 * 1000).toISOString();
+      let finalRisk: RiskLevel = 'LOW';
+      let waitingHours = 24;
 
-      await this.ctx.db.query(
-        `UPDATE items
-         SET status = 'WAITING_PERIOD', security_verified = TRUE, risk_level = $1, waiting_until = $2
-         WHERE id = $3`,
-        [classifiedRisk, waitingUntil, itemId],
-      );
+      // 7. Atomic transaction with row lock and conditional update to prevent race conditions
+      await this.ctx.db.transaction(async (txClient) => {
+        const lockRes = await txClient.query(
+          'SELECT * FROM items WHERE id = $1 FOR UPDATE',
+          [itemId],
+        );
+        if (lockRes.rows.length === 0) {
+          throw new NotFoundError(`Item with ID ${itemId} not found`, 'ITEM_NOT_FOUND');
+        }
+        const current = lockRes.rows[0];
 
-      await this.ctx.ports.audit.log({
-        actor_id: req.user!.id,
-        action: 'ITEM_VERIFIED',
-        item_id: itemId,
-        metadata: { risk_level: classifiedRisk, waiting_hours: waitingHours },
+        if (current.security_verified) {
+          throw new BadRequestError('Item has already been verified', 'ALREADY_VERIFIED');
+        }
+        if (current.status !== 'PENDING_HANDOVER') {
+          this.ctx.ports.workflow.assertItemTransition(current.status, 'WAITING_PERIOD');
+          throw new BadRequestError(
+            `Cannot verify item with status '${current.status}'. Only items with status 'PENDING_HANDOVER' can be verified.`,
+            'ILLEGAL_ITEM_TRANSITION',
+          );
+        }
+
+        const hiddenAttrs = typeof current.hidden_attributes === 'string'
+          ? (() => { try { return JSON.parse(current.hidden_attributes); } catch { return {}; } })()
+          : current.hidden_attributes || {};
+
+        const classifiedRisk = this.ctx.ports.risk.classify(current.category, hiddenAttrs);
+
+        // Security rule: high-risk items cannot be downgraded
+        const requestedRisk = req.body?.risk_level as RiskLevel | undefined;
+        if (classifiedRisk === 'HIGH' && requestedRisk && requestedRisk !== 'HIGH') {
+          throw new BadRequestError('Cannot downgrade risk level for high-risk item', 'CANNOT_DOWNGRADE_HIGH_RISK');
+        }
+
+        finalRisk = (classifiedRisk === 'HIGH' || requestedRisk === 'HIGH')
+          ? 'HIGH'
+          : (requestedRisk || classifiedRisk);
+
+        waitingHours = this.ctx.config.waitingPeriods[finalRisk] || 24;
+        const waitingUntil = new Date(Date.now() + waitingHours * 3600 * 1000).toISOString();
+
+        const updateRes = await txClient.query(
+          `UPDATE items
+           SET status = 'WAITING_PERIOD', security_verified = TRUE, risk_level = $1, waiting_until = $2
+           WHERE id = $3 AND status = 'PENDING_HANDOVER' AND security_verified = FALSE`,
+          [finalRisk, waitingUntil, itemId],
+        );
+
+        if (updateRes.rowCount === 0) {
+          throw new BadRequestError('Item has already been verified', 'ALREADY_VERIFIED');
+        }
       });
 
+      // 8. Record custody event & Audit trail
+      await this.ctx.ports.workflow.recordCustody({
+        item_id: itemId,
+        event: 'STORED',
+        actor_id: req.user.id,
+        location: 'Security Lost & Found Storage',
+      });
+
+      await this.ctx.ports.audit.log({
+        actor_id: req.user.id,
+        action: 'ITEM_VERIFIED',
+        item_id: itemId,
+        metadata: { risk_level: finalRisk, waiting_hours: waitingHours },
+      });
+
+      // 9. Return sanitized public projection
       const updated = await this.ctx.ports.core.getItem(itemId);
       res.status(200).json({ item: toPublicItem(updated) });
     } catch (err) {
@@ -179,9 +275,30 @@ export class ItemController {
 
   update = async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (!req.user) {
+        throw new UnauthorizedError('Authentication required', 'AUTH_REQUIRED');
+      }
+
       const itemId = req.params.id;
       const updates = req.body;
       const row = await this.ctx.ports.core.getItem(itemId);
+
+      const isStaff = req.user.role === 'SECURITY' || req.user.role === 'ADMIN';
+      const isFinder = req.user.id === row.finder_id;
+
+      if (!isStaff && !isFinder) {
+        throw new ForbiddenError('You do not have permission to update this item', 'FORBIDDEN_RESOURCE');
+      }
+
+      // Non-staff finders cannot alter status
+      if (!isStaff && updates.status && updates.status !== row.status) {
+        throw new ForbiddenError('Only security officers and administrators can change item status', 'FORBIDDEN_ROLE');
+      }
+
+      // Finders cannot edit item once verified or processed past PENDING_HANDOVER
+      if (!isStaff && row.status !== 'PENDING_HANDOVER') {
+        throw new BadRequestError('Cannot modify item after it has been verified or processed', 'ITEM_LOCKED');
+      }
 
       if (updates.status && updates.status !== row.status) {
         this.ctx.ports.workflow.assertItemTransition(row.status, updates.status);
@@ -205,6 +322,7 @@ export class ItemController {
   delete = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const itemId = req.params.id;
+      await this.ctx.ports.core.getItem(itemId);
       await this.ctx.db.query('DELETE FROM items WHERE id = $1', [itemId]);
       res.status(200).json({ success: true });
     } catch (err) {

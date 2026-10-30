@@ -110,7 +110,11 @@ export async function createApp(options?: {
           // Merge ports provided by module
           if (typeof mod.providePorts === 'function') {
             const customPorts = mod.providePorts(ctx);
-            Object.assign(ctx.ports, customPorts);
+            for (const [k, v] of Object.entries(customPorts)) {
+              if (!options?.overridePorts || !(k in options.overridePorts)) {
+                (ctx.ports as any)[k] = v;
+              }
+            }
             logger.info(`Module '${folder}' provided custom ports: ${Object.keys(customPorts).join(', ')}`);
           }
         }

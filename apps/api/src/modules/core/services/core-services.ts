@@ -60,9 +60,16 @@ export class CoreServices implements CoreServicesPort {
     }
   }
 
-  async markCollected(claim_id: string, item_id: string): Promise<void> {
-    await this.setClaimStatus(claim_id, 'COLLECTED');
-    await this.setItemStatus(item_id, 'COLLECTED');
+  async markCollected(claim_id: string, item_id: string, options?: { tx?: any }): Promise<void> {
+    const executor = options?.tx || this.db;
+    const resClaim = await executor.query('UPDATE claims SET status = $1 WHERE id = $2', ['COLLECTED', claim_id]);
+    if (resClaim.rowCount === 0) {
+      throw new NotFoundError(`Claim with ID ${claim_id} not found`, 'CLAIM_NOT_FOUND');
+    }
+    const resItem = await executor.query('UPDATE items SET status = $1 WHERE id = $2', ['COLLECTED', item_id]);
+    if (resItem.rowCount === 0) {
+      throw new NotFoundError(`Item with ID ${item_id} not found`, 'ITEM_NOT_FOUND');
+    }
   }
 
   async createNotification(payload: NotificationPayload): Promise<void> {

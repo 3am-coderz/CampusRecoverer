@@ -209,6 +209,10 @@ export class ClaimController {
       }
 
       // Assert legal transitions
+      if (claim.status === 'APPROVED') {
+        throw new BadRequestError('Claim has already been approved', 'ALREADY_APPROVED');
+      }
+
       this.ctx.ports.workflow.assertClaimTransition(claim.status, 'APPROVED');
       this.ctx.ports.workflow.assertItemTransition(item.status, 'APPROVED_AWAITING_COLLECTION');
 
@@ -264,6 +268,10 @@ export class ClaimController {
       const claimId = req.params.id;
       const { reason } = req.body;
       const claim = await this.ctx.ports.core.getClaim(claimId);
+
+      if (claim.status === 'REJECTED') {
+        throw new BadRequestError('Claim has already been rejected', 'ALREADY_REJECTED');
+      }
 
       this.ctx.ports.workflow.assertClaimTransition(claim.status, 'REJECTED');
       await this.ctx.ports.core.setClaimStatus(claimId, 'REJECTED');
