@@ -2,7 +2,7 @@ name: Campus Recoverer CI & Ownership Guard
 
 on:
   push:
-    branches: [main]
+    branches: [main, devops-part]
   pull_request:
     branches: [main]
 
@@ -26,8 +26,8 @@ jobs:
             echo "Branch belongs to Member $MEMBER_ID"
 
             # Compare modified files against main
-            git fetch origin main:main
-            CHANGED_FILES=$(git diff --name-only main...HEAD)
+            git fetch origin main || true
+            CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
             echo "Modified files in PR:"
             echo "$CHANGED_FILES"
 
@@ -101,7 +101,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r <(echo "fastapi uvicorn scikit-learn rapidfuzz pytest httpx pydantic")
+          pip install fastapi uvicorn scikit-learn rapidfuzz pytest httpx pydantic
       - name: Run Pytest
         run: PYTHONPATH=. pytest services/matching/tests
 
