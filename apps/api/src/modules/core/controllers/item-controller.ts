@@ -31,16 +31,18 @@ export class ItemController {
       }
       const data = parsed.data;
 
-      let finderId = req.user?.id;
+      let finderId: string = req.user?.id ?? '';
       if (!finderId) {
-        const guestUser = await this.ctx.db.query("SELECT id FROM users WHERE email = 'guest@campus.edu'");
+        const guestUser = await this.ctx.db.query(
+          "SELECT id FROM users WHERE email = 'guest@campus.edu'",
+        );
         if (guestUser.rows.length > 0) {
           finderId = guestUser.rows[0].id;
         } else {
           finderId = 'usr_guest_finder';
           await this.ctx.db.query(
-            "INSERT INTO users (id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
-            [finderId, 'guest@campus.edu', 'guest_hash', 'Guest User', 'FINDER']
+            'INSERT INTO users (id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+            [finderId, 'guest@campus.edu', 'guest_hash', 'Guest User', 'FINDER'],
           );
         }
       }
@@ -141,7 +143,11 @@ export class ItemController {
       const isStaff = req.user && (req.user.role === 'SECURITY' || req.user.role === 'ADMIN');
       const isFinder = req.user && req.user.id === row.finder_id;
 
-      if (!isStaff && !isFinder && (row.status === 'PENDING_HANDOVER' || row.status === 'WAITING_PERIOD')) {
+      if (
+        !isStaff &&
+        !isFinder &&
+        (row.status === 'PENDING_HANDOVER' || row.status === 'WAITING_PERIOD')
+      ) {
         throw new NotFoundError('Item not found or not currently available for public viewing');
       }
 

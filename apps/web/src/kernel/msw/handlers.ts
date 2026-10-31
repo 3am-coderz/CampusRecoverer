@@ -6,7 +6,7 @@ const seedUsers = [
   { id: 'usr_admin_1', email: 'admin@campus.edu', name: 'Chief Security Admin Chen', role: 'ADMIN', created_at: '2026-10-10T09:00:00Z' },
 ];
 
-let items = [
+const items = [
   {
     id: 'item_laptop_001',
     category: 'laptop',
@@ -73,7 +73,7 @@ let items = [
   }
 ];
 
-let claims = [
+const claims = [
   {
     id: 'claim_laptop_001_alex',
     item_id: 'item_laptop_001',
@@ -97,7 +97,7 @@ let claims = [
   }
 ];
 
-let notifications = [
+const notifications = [
   {
     id: 'notif_001',
     user_id: 'usr_student_1',

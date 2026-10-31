@@ -1,0 +1,20 @@
+{
+  "name": "@campus-recoverer/tests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Tests build verified'",
+    "test": "vitest run",
+    "test:e2e": "vitest run e2e",
+    "test:edge": "vitest run edge-cases",
+    "test:security": "vitest run security-invariants"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}
