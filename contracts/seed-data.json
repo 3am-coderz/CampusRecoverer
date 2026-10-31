@@ -1,0 +1,171 @@
+{
+  "users": [
+    {
+      "id": "usr_student_1",
+      "email": "student1@campus.edu",
+      "name": "Alex Rivera",
+      "role": "STUDENT",
+      "password_hash": "$2b$10$EpRnTzVlqHNP0.fUbXUwSOyUIXe/QLSUG6x0v5P8v2H1x3YFzC2g2",
+      "created_at": "2026-10-20T08:00:00Z"
+    },
+    {
+      "id": "usr_finder_1",
+      "email": "finder1@campus.edu",
+      "name": "Jordan Lee",
+      "role": "FINDER",
+      "password_hash": "$2b$10$EpRnTzVlqHNP0.fUbXUwSOyUIXe/QLSUG6x0v5P8v2H1x3YFzC2g2",
+      "created_at": "2026-10-20T08:15:00Z"
+    },
+    {
+      "id": "usr_security_1",
+      "email": "security@campus.edu",
+      "name": "Officer Sarah Miller",
+      "role": "SECURITY",
+      "password_hash": "$2b$10$EpRnTzVlqHNP0.fUbXUwSOyUIXe/QLSUG6x0v5P8v2H1x3YFzC2g2",
+      "created_at": "2026-10-15T09:00:00Z"
+    },
+    {
+      "id": "usr_admin_1",
+      "email": "admin@campus.edu",
+      "name": "Chief Security Admin Chen",
+      "role": "ADMIN",
+      "password_hash": "$2b$10$EpRnTzVlqHNP0.fUbXUwSOyUIXe/QLSUG6x0v5P8v2H1x3YFzC2g2",
+      "created_at": "2026-10-10T09:00:00Z"
+    },
+    {
+      "id": "usr_claimant_2",
+      "email": "student2@campus.edu",
+      "name": "Taylor Morgan",
+      "role": "STUDENT",
+      "password_hash": "$2b$10$EpRnTzVlqHNP0.fUbXUwSOyUIXe/QLSUG6x0v5P8v2H1x3YFzC2g2",
+      "created_at": "2026-10-21T10:00:00Z"
+    }
+  ],
+  "items": [
+    {
+      "id": "item_laptop_001",
+      "category": "laptop",
+      "public_description": "Silver 14-inch laptop with various stickers on lid",
+      "hidden_description": "Apple MacBook Pro M2, space gray, small scratch near bottom right corner, sticker of Git commit badge and Python logo, serial ending in 98A2",
+      "hidden_attributes": {
+        "brand": "Apple",
+        "model": "MacBook Pro 14 M2",
+        "color": "Space Gray",
+        "serial_number": "C02XYZ98A2",
+        "exact_location": "Under seat 4B in Science Hall Lecture 101",
+        "unique_features": ["small scratch near bottom right corner", "Git commit badge sticker", "Python logo sticker"],
+        "contents": ["laptop sleeve navy blue", "USB-C adapter inside sleeve pocket"]
+      },
+      "found_location_public": "Science Hall 101",
+      "found_date": "2026-10-24T14:30:00Z",
+      "status": "OPEN_FOR_CLAIMS",
+      "risk_level": "HIGH",
+      "security_verified": true,
+      "finder_id": "usr_finder_1",
+      "created_at": "2026-10-24T15:00:00Z"
+    },
+    {
+      "id": "item_headphones_002",
+      "category": "headphones",
+      "public_description": "Black over-ear wireless headphones in black zipper case",
+      "hidden_description": "Sony WH-1000XM4, matte black, replacement red audio cable inside case, custom initial 'A.R.' on headband inner cushion",
+      "hidden_attributes": {
+        "brand": "Sony",
+        "model": "WH-1000XM4",
+        "color": "Matte Black",
+        "serial_number": "SN8849201",
+        "exact_location": "Main Library second floor study carrel 12",
+        "unique_features": ["replacement red audio cable", "initial A.R. written on inner cushion"],
+        "contents": ["airplane adapter", "red 3.5mm cable"]
+      },
+      "found_location_public": "Main Library 2nd Floor",
+      "found_date": "2026-10-25T11:00:00Z",
+      "status": "OPEN_FOR_CLAIMS",
+      "risk_level": "MEDIUM",
+      "security_verified": true,
+      "finder_id": "usr_finder_1",
+      "created_at": "2026-10-25T11:30:00Z"
+    },
+    {
+      "id": "item_bottle_003",
+      "category": "bottle",
+      "public_description": "Stainless steel insulated water bottle 32oz",
+      "hidden_description": "Hydro Flask 32oz Pacific Blue with flex straw cap, dent on the bottom rim, sticker of National Parks",
+      "hidden_attributes": {
+        "brand": "Hydro Flask",
+        "model": "Wide Mouth 32oz",
+        "color": "Pacific Blue",
+        "exact_location": "Gym bench by locker room A",
+        "unique_features": ["dent on bottom rim", "Yosemite national park sticker"]
+      },
+      "found_location_public": "Campus Recreation Center",
+      "found_date": "2026-10-26T09:00:00Z",
+      "status": "OPEN_FOR_CLAIMS",
+      "risk_level": "LOW",
+      "security_verified": true,
+      "finder_id": "usr_finder_1",
+      "created_at": "2026-10-26T09:15:00Z"
+    },
+    {
+      "id": "item_pending_004",
+      "category": "wallet",
+      "public_description": "Brown leather bi-fold wallet",
+      "hidden_description": "Brown leather Fossil wallet with driver license belonging to Mark Vance, $20 bill, campus card ending in 4102",
+      "hidden_attributes": {
+        "brand": "Fossil",
+        "color": "Brown",
+        "contents": ["Driver license Mark Vance", "$20 cash", "Campus ID 4102"]
+      },
+      "found_location_public": "Student Union Dining",
+      "found_date": "2026-10-28T16:00:00Z",
+      "status": "PENDING_HANDOVER",
+      "risk_level": "HIGH",
+      "security_verified": false,
+      "finder_id": "usr_finder_1",
+      "created_at": "2026-10-28T16:15:00Z"
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim_laptop_001_alex",
+      "item_id": "item_laptop_001",
+      "claimant_id": "usr_student_1",
+      "description": "I left my MacBook Pro 14 space gray during CS lecture. It has a tiny mark near lower right edge and coding stickers including git and python. Comes in a dark sleeve.",
+      "claimed_attributes": {
+        "brand": "Apple",
+        "model": "MacBook Pro 14",
+        "color": "Space Gray",
+        "serial_number": "C02XYZ98A2",
+        "unique_features": ["tiny mark near lower right edge", "git commit badge", "python sticker"],
+        "contents": ["navy blue laptop sleeve", "usb c dongle"]
+      },
+      "lost_date": "2026-10-24T14:30:00Z",
+      "lost_location": "Science Hall 101 Lecture Hall",
+      "structured_score": 92.0,
+      "semantic_score": 85.5,
+      "final_score": 89.4,
+      "confidence_label": "HIGH",
+      "status": "SCORED",
+      "created_at": "2026-10-25T08:00:00Z"
+    },
+    {
+      "id": "claim_laptop_001_taylor",
+      "item_id": "item_laptop_001",
+      "claimant_id": "usr_claimant_2",
+      "description": "Lost my silver macbook pro in Science Hall yesterday afternoon.",
+      "claimed_attributes": {
+        "brand": "Apple",
+        "model": "MacBook Pro",
+        "color": "Silver"
+      },
+      "lost_date": "2026-10-24T15:00:00Z",
+      "lost_location": "Science Hall Room 101",
+      "structured_score": 55.0,
+      "semantic_score": 52.0,
+      "final_score": 53.8,
+      "confidence_label": "LOW",
+      "status": "SCORED",
+      "created_at": "2026-10-25T09:30:00Z"
+    }
+  ]
+}

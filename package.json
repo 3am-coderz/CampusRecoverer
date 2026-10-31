@@ -1,0 +1,29 @@
+{
+  "name": "campus-recoverer-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Privacy-preserving campus lost-and-found and asset-recovery platform",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "tests"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/api & npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces && npm run test:matching",
+    "test:api": "npm run test --workspace=apps/api",
+    "test:web": "npm run test --workspace=apps/web",
+    "test:matching": "bash -c 'source .venv/bin/activate && pytest services/matching/tests'",
+    "test:e2e": "npm run test --workspace=tests",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  }
+}

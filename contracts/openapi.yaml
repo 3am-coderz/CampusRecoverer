@@ -1,0 +1,926 @@
+openapi: 3.0.3
+info:
+  title: Campus Recoverer API
+  version: 1.0.0
+  description: Privacy-preserving campus lost-and-found and asset-recovery REST API.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - role
+        - created_at
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [STUDENT, FINDER, SECURITY, ADMIN]
+        created_at:
+          type: string
+    ItemPublic:
+      type: object
+      required:
+        - id
+        - category
+        - public_description
+        - found_location_public
+        - found_date
+        - status
+        - risk_level
+        - security_verified
+        - created_at
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        public_description:
+          type: string
+        found_location_public:
+          type: string
+        found_date:
+          type: string
+        status:
+          type: string
+          enum: [PENDING_HANDOVER, WAITING_PERIOD, OPEN_FOR_CLAIMS, UNDER_REVIEW, APPROVED_AWAITING_COLLECTION, COLLECTED, EXPIRED, STORED_LONG_TERM, DONATED, DISPOSED]
+        risk_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        security_verified:
+          type: boolean
+        created_at:
+          type: string
+    ItemDetail:
+      allOf:
+        - $ref: '#/components/schemas/ItemPublic'
+        - type: object
+          properties:
+            hidden_description:
+              type: string
+            hidden_attributes:
+              type: object
+            finder_id:
+              type: string
+    Claim:
+      type: object
+      required:
+        - id
+        - item_id
+        - claimant_id
+        - description
+        - claimed_attributes
+        - lost_date
+        - lost_location
+        - structured_score
+        - semantic_score
+        - final_score
+        - confidence_label
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+        item_id:
+          type: string
+        claimant_id:
+          type: string
+        description:
+          type: string
+        claimed_attributes:
+          type: object
+        lost_date:
+          type: string
+        lost_location:
+          type: string
+        structured_score:
+          type: number
+        semantic_score:
+          type: number
+        final_score:
+          type: number
+        confidence_label:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        status:
+          type: string
+          enum: [SUBMITTED, SCORED, MANUAL_REVIEW, APPROVED, REJECTED, WITHDRAWN, COLLECTED]
+        created_at:
+          type: string
+    Notification:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - message
+        - read
+        - created_at
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        read:
+          type: boolean
+        created_at:
+          type: string
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - seq
+        - actor_id
+        - action
+        - metadata
+        - created_at
+        - prev_hash
+        - row_hash
+      properties:
+        id:
+          type: string
+        seq:
+          type: integer
+        actor_id:
+          type: string
+        action:
+          type: string
+        item_id:
+          type: string
+          nullable: true
+        claim_id:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+        created_at:
+          type: string
+        prev_hash:
+          type: string
+        row_hash:
+          type: string
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: campus-recoverer-api
+
+  /auth/register:
+    post:
+      summary: Register a user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+                name: { type: string }
+                role: { type: string, enum: [STUDENT, FINDER, SECURITY, ADMIN], default: STUDENT }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /auth/login:
+    post:
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /auth/logout:
+    post:
+      summary: Logout
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  /auth/me:
+    get:
+      summary: Get current authenticated user
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+
+  /items:
+    post:
+      summary: Report found item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, public_description, hidden_description, hidden_attributes, found_location_public, found_date]
+              properties:
+                category: { type: string }
+                public_description: { type: string }
+                hidden_description: { type: string }
+                hidden_attributes: { type: object }
+                found_location_public: { type: string }
+                found_date: { type: string }
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/ItemPublic' }
+    get:
+      summary: Public listing of items
+      security: []
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: query
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ItemPublic' }
+
+  /items/{id}:
+    get:
+      summary: Get item details
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Item details (public projection unless authorized staff/finder)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/ItemDetail' }
+    patch:
+      summary: Update item details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/ItemPublic' }
+    delete:
+      summary: Delete item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  /items/{id}/verify:
+    post:
+      summary: Security verifies physical custody and approves item to waiting period
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item: { $ref: '#/components/schemas/ItemPublic' }
+
+  /items/{id}/claims:
+    get:
+      summary: Get all claims for an item (Security/Admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items: { $ref: '#/components/schemas/Claim' }
+
+  /claims:
+    post:
+      summary: Submit a claim for an open item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id, description, claimed_attributes, lost_date, lost_location]
+              properties:
+                item_id: { type: string }
+                description: { type: string }
+                claimed_attributes: { type: object }
+                lost_date: { type: string }
+                lost_location: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+
+  /claims/mine:
+    get:
+      summary: Get claims submitted by the current user
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items: { $ref: '#/components/schemas/Claim' }
+
+  /claims/{id}:
+    get:
+      summary: Get claim details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+
+  /claims/{id}/status:
+    patch:
+      summary: Update claim status (Security/Admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [MANUAL_REVIEW, APPROVED, REJECTED, WITHDRAWN]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+
+  /claims/{id}/approve:
+    post:
+      summary: Approve claim, move item to collection, and issue handover QR/OTP
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+                  handover_id: { type: string }
+                  expires_at: { type: string }
+
+  /claims/{id}/reject:
+    post:
+      summary: Reject claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim: { $ref: '#/components/schemas/Claim' }
+
+  /notifications:
+    get:
+      summary: Get notifications for logged in user
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+
+  /notifications/{id}/read:
+    patch:
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification: { $ref: '#/components/schemas/Notification' }
+
+  /handover/claims/{claimId}/qr:
+    get:
+      summary: Retrieve QR code and handover details for approved claimant
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qr_token: { type: string }
+                  qr_png_base64: { type: string }
+                  expires_at: { type: string }
+
+  /handover/verify:
+    post:
+      summary: Desk security verifies claimant QR and OTP and releases item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qr_token, otp]
+              properties:
+                qr_token: { type: string }
+                otp: { type: string }
+                id_verified: { type: boolean, default: false }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  item_id: { type: string }
+                  message: { type: string }
+
+  /workflow/dashboard:
+    get:
+      summary: Get workflow and security operations statistics
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending_reports: { type: integer }
+                  awaiting_handover: { type: integer }
+                  active_claims: { type: integer }
+                  high_risk_items: { type: integer }
+                  expired_items: { type: integer }
+
+  /workflow/items:
+    get:
+      summary: Security items overview
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ItemDetail' }
+
+  /workflow/claims:
+    get:
+      summary: Security claims overview with multi-confidence flags
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items: { type: object }
+
+  /workflow/items/{id}/hidden:
+    get:
+      summary: View hidden data for an item (Audited as HIDDEN_DATA_VIEWED)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hidden_description: { type: string }
+                  hidden_attributes: { type: object }
+
+  /workflow/items/{id}/receive:
+    post:
+      summary: Record physical receipt of item at security desk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storage_location]
+              properties:
+                storage_location: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  event: { type: object }
+
+  /workflow/items/{id}/custody:
+    get:
+      summary: Get custody timeline events for an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  custody_events:
+                    type: array
+                    items: { type: object }
+
+  /workflow/claims/{id}/questions:
+    get:
+      summary: Get ownership verification questions for a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        question: { type: string }
+
+  /workflow/claims/{id}/answers:
+    post:
+      summary: Submit answers to ownership questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: object
+                    required: [question_id, answer]
+                    properties:
+                      question_id: { type: string }
+                      answer: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+                  message: { type: string }
+
+  /workflow/disputes:
+    get:
+      summary: List disputes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disputes:
+                    type: array
+                    items: { type: object }
+    post:
+      summary: Flag a dispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id, reason]
+              properties:
+                item_id: { type: string }
+                reason: { type: string }
+                claim_ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dispute: { type: object }
+
+  /workflow/items/{id}/disposition:
+    post:
+      summary: Decide disposition of expired item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [disposition]
+              properties:
+                disposition:
+                  type: string
+                  enum: [STORE, DONATE, DISPOSE]
+                notes: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  item_status: { type: string }
+
+  /audit:
+    get:
+      summary: Query audit logs (Security/Admin)
+      parameters:
+        - name: item_id
+          in: query
+          schema: { type: string }
+        - name: claim_id
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLogEntry' }
+                  total: { type: integer }
+                  page: { type: integer }
+
+  /audit/verify-chain:
+    get:
+      summary: Verify the cryptographic hash chain of the audit trail
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified: { type: boolean }
+                  total_entries: { type: integer }
+                  tampered_seqs:
+                    type: array
+                    items: { type: integer }

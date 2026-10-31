@@ -1,0 +1,170 @@
+openapi: 3.0.3
+info:
+  title: Campus Recoverer Matching Engine API
+  version: 1.0.0
+  description: Internal ML and heuristic matching microservice for Campus Recoverer.
+paths:
+  /healthz:
+    get:
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: matching
+
+  /matching/score:
+    post:
+      summary: Calculate match score between an item and a claim
+      parameters:
+        - name: X-Internal-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - item
+                - claim
+              properties:
+                item:
+                  type: object
+                  required:
+                    - category
+                    - hidden_description
+                    - hidden_attributes
+                    - found_location_public
+                    - found_date
+                  properties:
+                    category:
+                      type: string
+                    hidden_description:
+                      type: string
+                    hidden_attributes:
+                      type: object
+                    found_location_public:
+                      type: string
+                    found_date:
+                      type: string
+                claim:
+                  type: object
+                  required:
+                    - description
+                    - claimed_attributes
+                    - lost_date
+                    - lost_location
+                  properties:
+                    description:
+                      type: string
+                    claimed_attributes:
+                      type: object
+                    lost_date:
+                      type: string
+                    lost_location:
+                      type: string
+      responses:
+        '200':
+          description: Score computed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - structured_score
+                  - semantic_score
+                  - final_score
+                  - match_score
+                  - confidence
+                  - ml_used
+                  - explanation
+                properties:
+                  structured_score:
+                    type: number
+                  semantic_score:
+                    type: number
+                  final_score:
+                    type: number
+                  match_score:
+                    type: number
+                  confidence:
+                    type: string
+                    enum: [LOW, MEDIUM, HIGH]
+                  ml_used:
+                    type: boolean
+                  explanation:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Unauthorized - missing or invalid X-Internal-Key
+        '422':
+          description: Validation error
+
+  /matching/similarity:
+    post:
+      summary: Evaluate text similarity for ownership verification question answers
+      parameters:
+        - name: X-Internal-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pairs
+              properties:
+                pairs:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - expected
+                      - given
+                    properties:
+                      expected:
+                        type: string
+                      given:
+                        type: string
+      responses:
+        '200':
+          description: Similarity evaluated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - results
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - similarity
+                        - matched
+                      properties:
+                        similarity:
+                          type: number
+                        matched:
+                          type: boolean
+        '401':
+          description: Unauthorized

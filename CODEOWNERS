@@ -1,0 +1,49 @@
+# Campus Recoverer CODEOWNERS
+# Frozen paths require approval from both M3 (Team Lead) and M5 (DevOps/Sec)
+
+# Frozen Shared Kernel and Contracts
+/contracts/ @member3 @member5
+/package.json @member3 @member5
+/package-lock.json @member3 @member5
+/tsconfig*.json @member3 @member5
+/.eslintrc* @member3 @member5
+/.prettierrc* @member3 @member5
+/README.md @member3 @member5
+/CODEOWNERS @member3 @member5
+/docs/ @member3 @member5
+/apps/web/src/kernel/ @member3 @member5
+/apps/api/src/kernel/ @member3 @member5
+
+# Member 1: Frontend and UX
+/apps/web/src/components/ @member1
+/apps/web/src/pages/ @member1
+/apps/web/src/layouts/ @member1
+/apps/web/src/services/ @member1
+/apps/web/src/hooks/ @member1
+/apps/web/src/utils/ @member1
+/apps/web/src/routes/ @member1
+/apps/web/src/admin/ @member1
+/apps/web/index.html @member1
+/apps/web/vite.config.ts @member1
+/apps/web/tailwind.config.js @member1
+/apps/web/postcss.config.js @member1
+
+# Member 2: Backend Core, DB Lifecycle and Handover
+/apps/api/db/migrations/core/ @member2
+/apps/api/db/migrations/handover/ @member2
+/apps/api/src/modules/core/ @member2
+/apps/api/src/modules/handover/ @member2
+
+# Member 3: Matching and ML Engine (Team Lead)
+/services/matching/ @member3
+
+# Member 4: Security Workflows and Business Logic
+/apps/api/db/migrations/workflow/ @member4
+/apps/api/src/modules/workflow/ @member4
+
+# Member 5: DevOps, Audit Logging and Testing
+/infra/ @member5
+/.github/ @member5
+/tests/ @member5
+/apps/api/db/migrations/audit/ @member5
+/apps/api/src/modules/audit/ @member5
