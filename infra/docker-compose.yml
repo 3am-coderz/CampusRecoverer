@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: campus_recoverer_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: campus_recoverer
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d campus_recoverer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  matching:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.matching
+    container_name: campus_recoverer_matching
+    environment:
+      INTERNAL_API_KEY: internal-matching-key-xyz
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    container_name: campus_recoverer_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      matching:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/campus_recoverer
+      JWT_SECRET: super-secret-campus-recoverer-jwt-key-2026
+      INTERNAL_API_KEY: internal-matching-key-xyz
+      MATCHING_SERVICE_URL: http://matching:8000
+      HANDOVER_SECRET: handover-hmac-secret-salt-2026
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/healthz').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+    container_name: campus_recoverer_web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
