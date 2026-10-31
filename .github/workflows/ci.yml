@@ -1,0 +1,129 @@
+name: Campus Recoverer CI & Ownership Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ownership-guard:
+    name: Partition Ownership Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Branch Partition Ownership
+        run: |
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          echo "Inspecting branch: $BRANCH_NAME"
+
+          if [[ "$BRANCH_NAME" =~ ^member([1-5])/ ]]; then
+            MEMBER_ID="${BASH_REMATCH[1]}"
+            echo "Branch belongs to Member $MEMBER_ID"
+
+            # Compare modified files against main
+            git fetch origin main:main
+            CHANGED_FILES=$(git diff --name-only main...HEAD)
+            echo "Modified files in PR:"
+            echo "$CHANGED_FILES"
+
+            M1_PATHS="apps/web/src/(components|pages|layouts|services|hooks|utils|routes|admin)|apps/web/(index.html|vite.config.ts|tailwind.config.js|postcss.config.js)"
+            M2_PATHS="apps/api/db/migrations/(core|handover)|apps/api/src/modules/(core|handover)"
+            M3_PATHS="services/matching"
+            M4_PATHS="apps/api/db/migrations/workflow|apps/api/src/modules/workflow"
+            M5_PATHS="infra|\.github|tests|apps/api/db/migrations/audit|apps/api/src/modules/audit"
+            FROZEN_PATHS="contracts|apps/web/src/kernel|apps/api/src/kernel|package.*|tsconfig.*|README\.md|CODEOWNERS|docs"
+
+            case "$MEMBER_ID" in
+              1) ALLOWED_REGEX="^(${M1_PATHS})" ;;
+              2) ALLOWED_REGEX="^(${M2_PATHS})" ;;
+              3) ALLOWED_REGEX="^(${M3_PATHS})" ;;
+              4) ALLOWED_REGEX="^(${M4_PATHS})" ;;
+              5) ALLOWED_REGEX="^(${M5_PATHS})" ;;
+            esac
+
+            VIOLATIONS=0
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              if [[ "$file" =~ ^(${FROZEN_PATHS}) ]]; then
+                echo "❌ VIOLATION: Frozen file modified without dual approval: $file"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              elif ! [[ "$file" =~ $ALLOWED_REGEX ]]; then
+                echo "❌ VIOLATION: File modified outside Member $MEMBER_ID partition: $file"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+            done <<< "$CHANGED_FILES"
+
+            if [ "$VIOLATIONS" -gt 0 ]; then
+              echo "Ownership guard failed with $VIOLATIONS violations."
+              exit 1
+            fi
+            echo "✅ Ownership check passed for Member $MEMBER_ID"
+          else
+            echo "Not a memberN/ branch or direct main push; skipping ownership guard."
+          fi
+
+  lint:
+    name: Lint & Style Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run lint --if-present
+
+  test-node:
+    name: Node Unit Tests (API & Web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run test:api
+      - run: npm run test:web --if-present
+
+  test-python:
+    name: Python Matching Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r <(echo "fastapi uvicorn scikit-learn rapidfuzz pytest httpx pydantic")
+      - name: Run Pytest
+        run: PYTHONPATH=. pytest services/matching/tests
+
+  build:
+    name: Build Apps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+
+  e2e:
+    name: End-to-End & Security Invariants Suite
+    needs: [build, test-node, test-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run test:e2e
