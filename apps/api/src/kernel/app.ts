@@ -48,7 +48,7 @@ export async function createApp(options?: {
 
   // Default Stubs
   const ports: AppPorts = {
-    audit: new AuditStub(),
+    audit: new AuditStub(db),
     handover: new HandoverStub(),
     risk: new RiskStub(),
     workflow: new WorkflowStub(),

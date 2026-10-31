@@ -62,6 +62,20 @@ describe('Member 2: Handover Module Tests', () => {
       ) VALUES ($1, $2, $3, 'My wallet', '{}', CURRENT_TIMESTAMP, 'Cafeteria', 90, 90, 90, 'HIGH', 'SCORED', CURRENT_TIMESTAMP)`,
       [claimId, itemId, studentId],
     );
+
+    // Answer ownership verification questions required for HIGH-risk item claim approval
+    const qRes = await request(app)
+      .get(`/workflow/claims/${claimId}/questions`)
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    await request(app)
+      .post(`/workflow/claims/${claimId}/answers`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        answers: [
+          { question_id: qRes.body.questions[0].id, answer: 'Fossil wallet with license' },
+        ],
+      });
   });
 
   afterAll(async () => {
