@@ -1,12 +1,16 @@
-# Member 2: Backend Core & Handover Partition Instructions
+# Member 3: Matching & ML Engine Partition Instructions
 
 ## 1. Overview
-You are **Member 2 (Backend Core, Database Foundation & Handover)** for Campus Recoverer.
-Your partition is **strictly isolated** to:
-- `apps/api/db/migrations/core/` (Core schema: Users, Items, Claims, Notifications)
-- `apps/api/db/migrations/handover/` (Handover schema: QR tokens, OTPs, verified collection)
-- `apps/api/src/modules/core/` (Item reporting, lost item registry, claims, auth controllers & routes)
-- `apps/api/src/modules/handover/` (Handover verification, desk release, security QR scanning)
+You are **Member 3 (Team Lead & ML/Matching Engineer)** for Campus Recoverer.
+Your partition is **strictly isolated** to the Python matching engine:
+- `services/__init__.py`
+- `services/matching/config.py`
+- `services/matching/main.py`
+- `services/matching/data/` (Synthetic dataset generator)
+- `services/matching/engine/` (Deterministic rules, TF-IDF / semantic cosine similarity, hybrid scoring)
+- `services/matching/tests/` (Unit tests for matching scores & confidence thresholds)
+- `services/matching/ENV.md`
+- `services/matching/README.md`
 
 ---
 
@@ -22,42 +26,44 @@ git pull origin main
 
 ### Step 2: Create your feature branch
 ```bash
-git checkout -b member2/backend-database
+git checkout -b member3/matching-ml-engine
 ```
 
 ### Step 3: Copy your partition files into the repository
-Copy all files from this `member-2-backend-core` folder into your repository root:
+Copy all files from this `member-3-ml-matching` folder into your repository root:
 ```bash
-# Assuming member-2-backend-core is in your downloads or parent directory:
-cp -r /path/to/member-2-backend-core/apps ./
+# Assuming member-3-ml-matching is in your downloads or parent directory:
+cp -r /path/to/member-3-ml-matching/services ./
 ```
 
 ### Step 4: Verify git status
-Run `git status`. You should see only your core and handover modules:
+Run `git status`. You should see only `services/` added:
 ```bash
 git status
 ```
 
 ### Step 5: Commit and Push
 ```bash
-git add apps/api/db/migrations/core/ apps/api/db/migrations/handover/ apps/api/src/modules/core/ apps/api/src/modules/handover/
-git commit -m "feat(member-2): implement backend core, database migrations, and handover"
-git push -u origin member2/backend-database
+git add services/
+git commit -m "feat(member-3): implement matching and ML similarity service"
+git push -u origin member3/matching-ml-engine
 ```
 
 ### Step 6: Create Pull Request
 1. Go to GitHub: `https://github.com/3am-coderz/CampusRecoverer`
-2. Open a Pull Request from `member2/backend-database` into `main`.
-3. PR Title: `feat(member-2): implement backend core, database migrations, and handover`
+2. Open a Pull Request from `member3/matching-ml-engine` into `main`.
+3. PR Title: `feat(member-3): implement matching and ML similarity service`
 4. GitHub will show **"Able to merge: These branches can be automatically merged"** with **zero merge conflicts**.
 
 ---
 
 ## 3. How to Run & Test Standalone
 ```bash
-cd apps/api
-npm install
-npm test
-npm run dev
-# The backend will listen on http://localhost:4000
+cd services/matching
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt || pip install fastapi uvicorn pydantic scikit-learn pytest
+pytest tests/
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Listening on http://localhost:8000
 ```
