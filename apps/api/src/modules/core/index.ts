@@ -41,7 +41,8 @@ export function register(app: Express, ctx: AppContext): void {
       try {
         const res = await ctx.db.query(
           `SELECT id, status FROM items
-           WHERE status = 'WAITING_PERIOD' AND waiting_until <= CURRENT_TIMESTAMP`,
+           WHERE status = 'WAITING_PERIOD' AND waiting_until <= $1`,
+          [new Date().toISOString()],
         );
         for (const row of res.rows) {
           ctx.ports.workflow.assertItemTransition('WAITING_PERIOD', 'OPEN_FOR_CLAIMS');
