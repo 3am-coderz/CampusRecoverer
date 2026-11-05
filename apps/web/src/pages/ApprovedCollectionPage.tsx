@@ -4,7 +4,7 @@ import { handoverService, ClaimQrResponse } from '../services/handoverService';
 import { claimsService } from '../services/claimsService';
 import { Claim } from '../kernel/types';
 import { formatTimeRemaining, formatDate } from '../utils/date';
-import { QrCode, Clock, ShieldCheck, AlertCircle, ArrowLeft, RefreshCw, KeyRound, Bell } from 'lucide-react';
+import { Clock, ShieldCheck, AlertCircle, ArrowLeft, RefreshCw, KeyRound } from 'lucide-react';
 
 export const ApprovedCollectionPage: React.FC = () => {
   const { claimId } = useParams<{ claimId: string }>();
@@ -102,12 +102,14 @@ export const ApprovedCollectionPage: React.FC = () => {
         {/* QR Code Container */}
         <div className="p-8 text-center space-y-6">
           <div className="relative inline-block p-6 bg-slate-50 border-2 border-slate-200 rounded-2xl shadow-inner">
-            {/* Visual SVG QR Representation */}
-            <div className="w-56 h-56 bg-white border border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center mx-auto shadow-sm">
-              <QrCode className="w-36 h-36 text-slate-800" />
-              <span className="text-[10px] text-slate-400 font-mono mt-2 uppercase tracking-widest">
-                HMAC-SHA256 SECURED
-              </span>
+            <div className="w-56 h-56 bg-white border border-slate-300 rounded-xl p-4 flex items-center justify-center mx-auto shadow-sm">
+              <img
+                src={qrData.qrPngBase64}
+                alt="Secure collection QR code"
+                className="w-full h-full object-contain"
+                width={224}
+                height={224}
+              />
             </div>
 
             {isExpired && (
