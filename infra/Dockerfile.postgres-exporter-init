@@ -1,0 +1,5 @@
+FROM postgres:16-alpine
+
+COPY postgres-exporter-user.sh /usr/local/bin/create-postgres-exporter-user.sh
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/create-postgres-exporter-user.sh"]

@@ -1,22 +1,24 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: campus_recoverer_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: campus_recoverer
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d campus_recoverer"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      default: {}
+      pg_metrics:
+        ipv4_address: 172.30.241.2
 
   matching:
     build:
@@ -24,14 +26,20 @@ services:
       dockerfile: infra/Dockerfile.matching
     container_name: campus_recoverer_matching
     environment:
-      INTERNAL_API_KEY: internal-matching-key-xyz
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
+      METRICS_PORT: 8001
+      METRICS_BIND_ADDRESS: 172.30.240.11
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      default: {}
+      observability:
+        ipv4_address: 172.30.240.11
 
   api:
     build:
@@ -46,18 +54,28 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/campus_recoverer
-      JWT_SECRET: super-secret-campus-recoverer-jwt-key-2026
-      INTERNAL_API_KEY: internal-matching-key-xyz
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env}
       MATCHING_SERVICE_URL: http://matching:8000
-      HANDOVER_SECRET: handover-hmac-secret-salt-2026
+      HANDOVER_SECRET: ${HANDOVER_SECRET:?Set HANDOVER_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      WAITING_PERIOD_LOW_HOURS: ${WAITING_PERIOD_LOW_HOURS:-0}
+      WAITING_PERIOD_MEDIUM_HOURS: ${WAITING_PERIOD_MEDIUM_HOURS:-0}
+      WAITING_PERIOD_HIGH_HOURS: ${WAITING_PERIOD_HIGH_HOURS:-0}
+      METRICS_PORT: 4001
+      METRICS_BIND_ADDRESS: 172.30.240.10
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4000/healthz').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      default: {}
+      observability:
+        ipv4_address: 172.30.240.10
 
   web:
     build:
@@ -69,6 +87,124 @@ services:
         condition: service_healthy
     ports:
       - "5173:80"
+    networks:
+      default: {}
+
+  postgres-exporter-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres-exporter-init
+    container_name: campus_recoverer_postgres_exporter_init
+    entrypoint: ["/bin/sh", "/usr/local/bin/create-postgres-exporter-user.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_EXPORTER_USER: ${POSTGRES_EXPORTER_USER:-campus_metrics}
+      POSTGRES_EXPORTER_PASSWORD: ${POSTGRES_EXPORTER_PASSWORD:?Set POSTGRES_EXPORTER_PASSWORD in .env}
+    restart: "no"
+    networks:
+      default: {}
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.18.1
+    container_name: campus_recoverer_postgres_exporter
+    command:
+      - --web.listen-address=:9187
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-exporter-init:
+        condition: service_completed_successfully
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_EXPORTER_USER:-campus_metrics}
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:?Set POSTGRES_EXPORTER_PASSWORD in .env}
+    expose:
+      - "9187"
+    restart: unless-stopped
+    networks:
+      pg_metrics:
+        ipv4_address: 172.30.241.3
+      observability: {}
+
+  prometheus:
+    build:
+      context: .
+      dockerfile: Dockerfile.prometheus
+    container_name: campus_recoverer_prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    depends_on:
+      api:
+        condition: service_healthy
+      matching:
+        condition: service_healthy
+      postgres-exporter:
+        condition: service_started
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      monitoring_host: {}
+      observability: {}
+
+  grafana:
+    build:
+      context: .
+      dockerfile: Dockerfile.grafana
+    container_name: campus_recoverer_grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      monitoring_host: {}
+      observability: {}
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default: {}
+  monitoring_host: {}
+  observability:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.240.0/24
+  pg_metrics:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.241.0/24

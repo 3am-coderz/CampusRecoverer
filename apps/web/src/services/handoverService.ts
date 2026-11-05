@@ -17,6 +17,7 @@ export interface DeskVerifyResult {
 
 export interface ClaimQrResponse {
   qrToken: string;
+  qrPngBase64: string;
   expiresAt: string;
   status: string;
 }
