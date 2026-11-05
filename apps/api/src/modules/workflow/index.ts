@@ -24,10 +24,12 @@ export function register(app: Express, ctx: AppContext): void {
     expiryCronTask = cron.schedule('*/5 * * * *', async () => {
       try {
         const retentionDays = ctx.config.retentionPeriodDays;
+        const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000).toISOString();
         const res = await ctx.db.query(
           `SELECT id, status FROM items
            WHERE status IN ('OPEN_FOR_CLAIMS', 'UNDER_REVIEW')
-             AND created_at <= (CURRENT_TIMESTAMP - INTERVAL '${retentionDays} days')`,
+             AND created_at <= $1`,
+          [cutoff],
         );
 
         for (const row of res.rows) {

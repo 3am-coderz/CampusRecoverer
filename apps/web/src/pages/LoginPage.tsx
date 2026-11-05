@@ -117,19 +117,19 @@ export const LoginPage: React.FC = () => {
         <div className="space-y-1.5">
           <button
             type="button"
-            onClick={() => handleQuickLogin('student@campus.edu', 'password123')}
+            onClick={() => handleQuickLogin('student1@campus.edu', 'password123')}
             className="w-full text-left px-2.5 py-1.5 bg-white border border-slate-200 rounded hover:border-blue-400 text-slate-700 flex justify-between items-center transition"
           >
             <span>Student Claimant</span>
-            <span className="text-[10px] text-blue-600 font-mono">student@campus.edu</span>
+            <span className="text-[10px] text-blue-600 font-mono">student1@campus.edu</span>
           </button>
           <button
             type="button"
-            onClick={() => handleQuickLogin('finder@campus.edu', 'password123')}
+            onClick={() => handleQuickLogin('finder1@campus.edu', 'password123')}
             className="w-full text-left px-2.5 py-1.5 bg-white border border-slate-200 rounded hover:border-blue-400 text-slate-700 flex justify-between items-center transition"
           >
             <span>Finder User</span>
-            <span className="text-[10px] text-blue-600 font-mono">finder@campus.edu</span>
+            <span className="text-[10px] text-blue-600 font-mono">finder1@campus.edu</span>
           </button>
           <button
             type="button"
@@ -138,6 +138,14 @@ export const LoginPage: React.FC = () => {
           >
             <span>Security Desk Officer</span>
             <span className="text-[10px] text-purple-600 font-mono">security@campus.edu</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickLogin('admin@campus.edu', 'password123')}
+            className="w-full text-left px-2.5 py-1.5 bg-white border border-slate-200 rounded hover:border-blue-400 text-slate-700 flex justify-between items-center transition"
+          >
+            <span>Admin</span>
+            <span className="text-[10px] text-red-600 font-mono">admin@campus.edu</span>
           </button>
         </div>
       </div>
