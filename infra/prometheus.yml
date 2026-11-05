@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [prometheus:9090]
+
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: [api:4001]
+
+  - job_name: matching
+    metrics_path: /metrics
+    static_configs:
+      - targets: [matching:8001]
+
+  - job_name: postgres
+    metrics_path: /metrics
+    static_configs:
+      - targets: [postgres-exporter:9187]
