@@ -48,9 +48,7 @@ export async function resolveItemClaims(
 
     for (const c of claims) {
       if (c.final_score >= highThreshold || Math.abs(top1.final_score - c.final_score) <= conflictMargin) {
-        if (c.status !== 'MANUAL_REVIEW') {
-          claimUpdates.push({ claim_id: c.id, status: 'MANUAL_REVIEW' });
-        }
+        claimUpdates.push({ claim_id: c.id, status: 'MANUAL_REVIEW' });
       }
     }
 
