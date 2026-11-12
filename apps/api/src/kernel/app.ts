@@ -139,7 +139,28 @@ export async function createApp(options?: {
     }
   }
 
-  // Health endpoint
+  // Root service overview endpoint (resolves 'Cannot GET /')
+  app.get('/', (_req: Request, res: Response) => {
+    res.status(200).json({
+      service: 'Campus Recoverer API',
+      status: 'online',
+      environment: config.nodeEnv,
+      version: '1.0.0',
+      database: {
+        connected: true,
+        type: db.isMemory ? 'in-memory-pg' : 'postgresql-persisted',
+      },
+      endpoints: {
+        health: '/healthz',
+        readiness: '/readyz',
+        auth: '/auth',
+        items: '/items',
+        claims: '/claims',
+      },
+    });
+  });
+
+  // Health / liveness endpoint for Render
   app.get('/healthz', (_req: Request, res: Response) => {
     res.status(200).json({
       status: 'ok',
@@ -147,6 +168,32 @@ export async function createApp(options?: {
       memory_db: db.isMemory,
       modules: loadedModules.map((m) => m.name),
     });
+  });
+
+  // Readiness endpoint (probes actual database)
+  app.get('/readyz', async (_req: Request, res: Response) => {
+    try {
+      const dbCheck = await db.query('SELECT 1 as alive, NOW() as server_time');
+      res.status(200).json({
+        status: 'ready',
+        service: 'campus-recoverer-api',
+        database: {
+          healthy: true,
+          is_memory: db.isMemory,
+          type: db.isMemory ? 'in-memory-pg' : 'postgresql-persisted',
+          server_time: dbCheck.rows[0]?.server_time || null,
+        },
+      });
+    } catch (err: any) {
+      res.status(503).json({
+        status: 'not_ready',
+        service: 'campus-recoverer-api',
+        database: {
+          healthy: false,
+          error: err.message,
+        },
+      });
+    }
   });
 
   // Central error handling middleware

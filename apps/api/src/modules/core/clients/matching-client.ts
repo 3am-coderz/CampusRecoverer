@@ -11,6 +11,13 @@ export class HttpMatchingClient implements MatchingPort {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = `http://${url}`;
     }
+    try {
+      const parsed = new URL(url);
+      if (!parsed.port && !parsed.hostname.includes('.onrender.com') && parsed.hostname !== 'localhost') {
+        parsed.port = '8000';
+        url = parsed.toString();
+      }
+    } catch {}
     this.baseUrl = url.replace(/\/+$/, '');
     this.apiKey = apiKey;
   }

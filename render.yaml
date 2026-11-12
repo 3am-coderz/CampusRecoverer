@@ -51,3 +51,9 @@ services:
     dockerfilePath: infra/Dockerfile.web
     dockerContext: .
     plan: free
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: campus-recoverer-api
+          property: host
